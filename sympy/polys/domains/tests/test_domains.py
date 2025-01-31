@@ -562,22 +562,70 @@ def test_Domain_get_field():
     assert QQ[x, y].get_field() == QQ.frac_field(x, y)
 
 
+def test_Domain_set_domain():
+    doms = [GF(5), ZZ, QQ, ALG, RR, CC, EX, ZZ[z], QQ[z], RR[z], CC[z], EX[z]]
+    for D1 in doms:
+        for D2 in doms:
+            assert D1[x].set_domain(D2) == D2[x]
+            assert D1[x, y].set_domain(D2) == D2[x, y]
+            assert D1.frac_field(x).set_domain(D2) == D2.frac_field(x)
+            assert D1.frac_field(x, y).set_domain(D2) == D2.frac_field(x, y)
+            assert D1.old_poly_ring(x).set_domain(D2) == D2.old_poly_ring(x)
+            assert D1.old_poly_ring(x, y).set_domain(D2) == D2.old_poly_ring(x, y)
+            assert D1.old_frac_field(x).set_domain(D2) == D2.old_frac_field(x)
+            assert D1.old_frac_field(x, y).set_domain(D2) == D2.old_frac_field(x, y)
+
+
+def test_Domain_is_Exact():
+    exact = [GF(5), ZZ, QQ, ALG, EX]
+    inexact = [RR, CC]
+    for D in exact + inexact:
+        for R in D, D[x], D.frac_field(x), D.old_poly_ring(x), D.old_frac_field(x):
+            if D in exact:
+                assert R.is_Exact is True
+            else:
+                assert R.is_Exact is False
+
+
 def test_Domain_get_exact():
     assert EX.get_exact() == EX
     assert ZZ.get_exact() == ZZ
     assert QQ.get_exact() == QQ
     assert RR.get_exact() == QQ
-    # XXX: This should also be like RR:
-    # assert CC.get_exact() == QQ_I
+    assert CC.get_exact() == QQ_I
     assert ALG.get_exact() == ALG
     assert ZZ[x].get_exact() == ZZ[x]
     assert QQ[x].get_exact() == QQ[x]
+    assert RR[x].get_exact() == QQ[x]
+    assert CC[x].get_exact() == QQ_I[x]
     assert ZZ[x, y].get_exact() == ZZ[x, y]
     assert QQ[x, y].get_exact() == QQ[x, y]
+    assert RR[x, y].get_exact() == QQ[x, y]
+    assert CC[x, y].get_exact() == QQ_I[x, y]
     assert ZZ.frac_field(x).get_exact() == ZZ.frac_field(x)
     assert QQ.frac_field(x).get_exact() == QQ.frac_field(x)
+    assert RR.frac_field(x).get_exact() == QQ.frac_field(x)
+    assert CC.frac_field(x).get_exact() == QQ_I.frac_field(x)
     assert ZZ.frac_field(x, y).get_exact() == ZZ.frac_field(x, y)
     assert QQ.frac_field(x, y).get_exact() == QQ.frac_field(x, y)
+    assert RR.frac_field(x, y).get_exact() == QQ.frac_field(x, y)
+    assert CC.frac_field(x, y).get_exact() == QQ_I.frac_field(x, y)
+    assert ZZ.old_poly_ring(x).get_exact() == ZZ.old_poly_ring(x)
+    assert QQ.old_poly_ring(x).get_exact() == QQ.old_poly_ring(x)
+    assert RR.old_poly_ring(x).get_exact() == QQ.old_poly_ring(x)
+    assert CC.old_poly_ring(x).get_exact() == QQ_I.old_poly_ring(x)
+    assert ZZ.old_poly_ring(x, y).get_exact() == ZZ.old_poly_ring(x, y)
+    assert QQ.old_poly_ring(x, y).get_exact() == QQ.old_poly_ring(x, y)
+    assert RR.old_poly_ring(x, y).get_exact() == QQ.old_poly_ring(x, y)
+    assert CC.old_poly_ring(x, y).get_exact() == QQ_I.old_poly_ring(x, y)
+    assert ZZ.old_frac_field(x).get_exact() == ZZ.old_frac_field(x)
+    assert QQ.old_frac_field(x).get_exact() == QQ.old_frac_field(x)
+    assert RR.old_frac_field(x).get_exact() == QQ.old_frac_field(x)
+    assert CC.old_frac_field(x).get_exact() == QQ_I.old_frac_field(x)
+    assert ZZ.old_frac_field(x, y).get_exact() == ZZ.old_frac_field(x, y)
+    assert QQ.old_frac_field(x, y).get_exact() == QQ.old_frac_field(x, y)
+    assert RR.old_frac_field(x, y).get_exact() == QQ.old_frac_field(x, y)
+    assert CC.old_frac_field(x, y).get_exact() == QQ_I.old_frac_field(x, y)
 
 
 def test_Domain_characteristic():
@@ -614,8 +662,8 @@ def test_Domain_convert():
 
     def check_domains(K1, K2):
         K3 = K1.unify(K2)
-        check_element(K3.convert_from( K1.one, K1),  K3.one, K1, K2, K3)
-        check_element(K3.convert_from( K2.one, K2),  K3.one, K1, K2, K3)
+        check_element(K3.convert_from(K1.one, K1),  K3.one,  K1, K2, K3)
+        check_element(K3.convert_from(K2.one, K2),  K3.one,  K1, K2, K3)
         check_element(K3.convert_from(K1.zero, K1), K3.zero, K1, K2, K3)
         check_element(K3.convert_from(K2.zero, K2), K3.zero, K1, K2, K3)
 
@@ -648,6 +696,11 @@ def test_Domain_convert():
     assert CC.convert(ZZ_I(1, 2)) == CC(1, 2)
     assert CC.convert(QQ_I(1, 2)) == CC(1, 2)
 
+    assert QQ.convert_from(RR(0.5), RR) == QQ(1, 2)
+    assert RR.convert_from(QQ(1, 2), QQ) == RR(0.5)
+    assert QQ_I.convert_from(CC(0.5, 0.75), CC) == QQ_I(QQ(1, 2), QQ(3, 4))
+    assert CC.convert_from(QQ_I(QQ(1, 2), QQ(3, 4)), QQ_I) == CC(0.5, 0.75)
+
     K1 = QQ.frac_field(x)
     K2 = ZZ.frac_field(x)
     K3 = QQ[x]
@@ -657,6 +710,27 @@ def test_Domain_convert():
         assert Ka.convert_from(Kb.from_sympy(x), Kb) == Ka.from_sympy(x)
 
     assert K2.convert_from(QQ(1, 2), QQ) == K2(QQ(1, 2))
+
+
+def test_EX_convert():
+
+    elements = [
+        (ZZ, ZZ(3)),
+        (QQ, QQ(1,2)),
+        (ZZ_I, ZZ_I(1,2)),
+        (QQ_I, QQ_I(1,2)),
+        (RR, RR(3)),
+        (CC, CC(1,2)),
+        (EX, EX(3)),
+        (EXRAW, EXRAW(3)),
+        (ALG, ALG.from_sympy(sqrt(2))),
+    ]
+
+    for R, e in elements:
+        for EE in EX, EXRAW:
+            elem = EE.from_sympy(R.to_sympy(e))
+            assert EE.convert_from(e, R) == elem
+            assert R.convert_from(elem, EE) == e
 
 
 def test_GlobalPolynomialRing_convert():
@@ -973,9 +1047,15 @@ def test_ModularInteger():
                 raises(TypeError, lambda: F5(n1) > F5(n2))
                 raises(TypeError, lambda: F5(n1) >= F5(n2))
 
+    # https://github.com/sympy/sympy/issues/26789
+    assert GF(Integer(5)) == F5
+    assert F5(Integer(3)) == F5(3)
+
+
 def test_QQ_int():
     assert int(QQ(2**2000, 3**1250)) == 455431
     assert int(QQ(2**100, 3)) == 422550200076076467165567735125
+
 
 def test_RR_double():
     assert RR(3.14) > 1e-50
@@ -984,6 +1064,7 @@ def test_RR_double():
     assert RR(1e-15) > 1e-50
     assert RR(1e-20) > 1e-50
     assert RR(1e-40) > 1e-50
+
 
 def test_RR_Float():
     f1 = Float("1.01")
@@ -1063,6 +1144,11 @@ def test_gaussian_domains():
         assert 2*i + r == q
         i, r = divmod(2, q)
         assert q*i + r == G(2, 0)
+
+        a, b = G(2, 0), G(1, -1)
+        c, d, g = G.gcdex(a, b)
+        assert g == G.gcd(a, b)
+        assert c * a + d * b == g
 
         raises(ZeroDivisionError, lambda: q % 0)
         raises(ZeroDivisionError, lambda: q / 0)
@@ -1198,11 +1284,6 @@ def test_canonical_unit():
     i = K.from_sympy(I)
     assert i / i == K.one
     assert (K.one + i)/(i - K.one) == -i
-
-
-def test_issue_18278():
-    assert str(RR(2).parent()) == 'RR'
-    assert str(CC(2).parent()) == 'CC'
 
 
 def test_Domain_is_negative():

@@ -149,20 +149,8 @@ def _pivot(M, i, j):
 
 def _choose_pivot_row(A, B, candidate_rows, pivot_col, Y):
     # Choose row with smallest ratio
-    first_row = candidate_rows[0]
-    min_ratio = B[first_row] / A[first_row, pivot_col]
-    min_rows = [first_row]
-    for i in candidate_rows[1:]:
-        ratio = B[i] / A[i, pivot_col]
-        if ratio < min_ratio:
-            min_ratio = ratio
-            min_rows = [i]
-        elif ratio == min_ratio:
-            min_rows.append(i)
-
     # If there are ties, pick using Bland's rule
-    _, row = min((Y[i], i) for i in min_rows)
-    return row
+    return min(candidate_rows, key=lambda i: (B[i] / A[i, pivot_col], Y[i]))
 
 
 def _simplex(A, B, C, D=None, dual=False):
@@ -371,7 +359,6 @@ def _simplex(A, B, C, D=None, dual=False):
         C = M[-1, :-1]
 
         # Choose a pivot column, c
-        piv_cols = []
         piv_cols = [_ for _ in range(n) if C[_] < 0]
         if not piv_cols:
             break
@@ -902,84 +889,53 @@ def _handle_bounds(bounds):
     # introduce auxilliary variables as needed for univariate
     # inequalities
 
+    def _make_list(length: int, index_value_pairs):
+        li = [0] * length
+        for idx, val in index_value_pairs:
+            li[idx] = val
+        return li
+
     unbound = []
-    R = [0] * len(bounds)  # a (growing) row of zeros
-
-    def n():
-        return len(R) - 1
-
-    def Arow(inc=1):
-        R.extend([0] * inc)
-        return R[:]
-
     row = []
+    row2 = []
+    b_len = len(bounds)
     for x, (a, b) in enumerate(bounds):
         if a is None and b is None:
             unbound.append(x)
         elif a is None:
             # r[x] = b - u
-            A = Arow()
-            A[x] = 1
-            A[n()] = 1
-            B = [b]
-            row.append((A, B))
-            A = [0] * len(A)
-            A[x] = -1
-            A[n()] = -1
-            B = [-b]
-            row.append((A, B))
+            b_len += 1
+            row.append(_make_list(b_len, [(x, 1), (-1, 1)]))
+            row.append(_make_list(b_len, [(x, -1), (-1, -1)]))
+            row2.extend([[b], [-b]])
         elif b is None:
             if a:
                 # r[x] = a + u
-                A = Arow()
-                A[x] = 1
-                A[n()] = -1
-                B = [a]
-                row.append((A, B))
-                A = [0] * len(A)
-                A[x] = -1
-                A[n()] = 1
-                B = [-a]
-                row.append((A, B))
+                b_len += 1
+                row.append(_make_list(b_len, [(x, 1), (-1, -1)]))
+                row.append(_make_list(b_len, [(x, -1), (-1, 1)]))
+                row2.extend([[a], [-a]])
             else:
                 # standard nonnegative relationship
                 pass
         else:
             # r[x] = u + a
-            A = Arow()
-            A[x] = 1
-            A[n()] = -1
-            B = [a]
-            row.append((A, B))
-            A = [0] * len(A)
-            A[x] = -1
-            A[n()] = 1
-            B = [-a]
-            row.append((A, B))
+            b_len += 1
+            row.append(_make_list(b_len, [(x, 1), (-1, -1)]))
+            row.append(_make_list(b_len, [(x, -1), (-1, 1)]))
             # u <= b - a
-            A = [0] * len(A)
-            A[x] = 0
-            A[n()] = 1
-            B = [b - a]
-            row.append((A, B))
+            row.append(_make_list(b_len, [(-1, 1)]))
+            row2.extend([[a], [-a], [b - a]])
 
     # make change of variables for unbound variables
     for x in unbound:
         # r[x] = u - v
-        A = Arow(2)
-        B = [0]
-        A[x] = 1
-        A[n()] = 1
-        A[n() - 1] = -1
-        row.append((A, B))
-        A = [0] * len(A)
-        A[x] = -1
-        A[n()] = -1
-        A[n() - 1] = 1
-        row.append((A, B))
+        b_len += 2
+        row.append(_make_list(b_len, [(x, 1), (-1, 1), (-2, -1)]))
+        row.append(_make_list(b_len, [(x, -1), (-1, -1), (-2, 1)]))
+        row2.extend([[0], [0]])
 
-    return Matrix([r+[0]*(len(R) - len(r)) for r,_ in row]
-        ), Matrix([i[1] for i in row])
+    return Matrix([r + [0]*(b_len - len(r)) for r in row]), Matrix(row2)
 
 
 def linprog(c, A=None, b=None, A_eq=None, b_eq=None, bounds=None):
@@ -1141,13 +1097,8 @@ def show_linprog(c, A=None, b=None, A_eq=None, b_eq=None, bounds=None):
     x = Matrix(symbols('x1:%s' % (A.cols+1)))
     f,c = (C*x)[0], [i<=j for i,j in zip(A*x, b)] + [Eq(i,j) for i,j in zip(A_eq*x,b_eq)]
     for i, (lo, hi) in enumerate(bounds):
-        if lo is None and hi is None:
-            continue
-        if lo is None:
-            c.append(x[i]<=hi)
-        elif hi is None:
+        if lo is not None:
             c.append(x[i]>=lo)
-        else:
-            c.append(x[i]>=lo)
+        if hi is not None:
             c.append(x[i]<=hi)
     return f,c

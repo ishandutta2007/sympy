@@ -9,6 +9,7 @@ from sympy.functions.elementary.exponential import (LambertW, exp, exp_polar, lo
 from sympy.functions.elementary.miscellaneous import (real_root, sqrt)
 from sympy.functions.elementary.piecewise import Piecewise
 from sympy.functions.elementary.trigonometric import (cos, sin)
+from sympy.functions.elementary.miscellaneous import Min
 from sympy.functions.special.hyper import meijerg
 from sympy.integrals.integrals import Integral
 from sympy.logic.boolalg import And
@@ -23,10 +24,9 @@ from sympy.plotting.plot import (
 from sympy.plotting.series import (
     LineOver1DRangeSeries, Parametric2DLineSeries, Parametric3DLineSeries,
     ParametricSurfaceSeries, SurfaceOver2DRangeSeries)
-from sympy.testing.pytest import skip, warns, raises, warns_deprecated_sympy
+from sympy.testing.pytest import skip, skip_under_pyodide, warns, raises, warns_deprecated_sympy
 from sympy.utilities import lambdify as lambdify_
 from sympy.utilities.exceptions import ignore_warnings
-
 
 unset_show()
 
@@ -60,6 +60,10 @@ class DummyBackendOk(Plot):
     def close(self):
         pass
 
+def test_basic_plotting_backend():
+    x = Symbol('x')
+    plot(x, (x, 0, 3), backend='text')
+    plot(x**2 + 1, (x, 0, 3), backend='text')
 
 @pytest.mark.parametrize("adaptive", [True, False])
 def test_plot_and_save_1(adaptive):
@@ -626,6 +630,7 @@ def test_issue_11865(adaptive):
     assert len(p[0].get_data()[0]) >= 30
 
 
+@skip_under_pyodide("Warnings not emitted in Pyodide because of lack of WASM fp exception support")
 def test_issue_11461():
     if not matplotlib:
         skip("Matplotlib not the default backend")
@@ -1239,6 +1244,16 @@ def test_plot3d_plot_contour_arguments():
     assert p[0].ranges[0][1:] == (-5, 3)
     assert p[0].ranges[1][1:] == (-2, 1)
     assert p[0].get_label(False) == "test"
+    assert p[0].rendering_kw == {}
+
+    # test issue 25818
+    # single expression, custom range, min/max functions
+    p = plot3d(Min(x, y), (x, 0, 10), (y, 0, 10))
+    assert isinstance(p[0], SurfaceOver2DRangeSeries)
+    assert p[0].expr == Min(x, y)
+    assert p[0].ranges[0] == (x, 0, 10)
+    assert p[0].ranges[1] == (y, 0, 10)
+    assert p[0].get_label(False) == "Min(x, y)"
     assert p[0].rendering_kw == {}
 
 

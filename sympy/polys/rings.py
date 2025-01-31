@@ -15,11 +15,12 @@ from sympy.ntheory.multinomial import multinomial_coefficients
 from sympy.polys.compatibility import IPolys
 from sympy.polys.constructor import construct_domain
 from sympy.polys.densebasic import ninf, dmp_to_dict, dmp_from_dict
+from sympy.polys.domains.domain import Domain
 from sympy.polys.domains.domainelement import DomainElement
 from sympy.polys.domains.polynomialring import PolynomialRing
 from sympy.polys.heuristicgcd import heugcd
 from sympy.polys.monomials import MonomialOps
-from sympy.polys.orderings import lex
+from sympy.polys.orderings import lex, MonomialOrder
 from sympy.polys.polyerrors import (
     CoercionFailed, GeneratorsError,
     ExactQuotientFailed, MultivariatePolynomialError)
@@ -33,7 +34,7 @@ from sympy.utilities.iterables import is_sequence
 from sympy.utilities.magic import pollute
 
 @public
-def ring(symbols, domain, order=lex):
+def ring(symbols, domain, order: MonomialOrder|str = lex):
     """Construct a polynomial ring returning ``(ring, x_1, ..., x_n)``.
 
     Parameters
@@ -196,6 +197,12 @@ _ring_cache: dict[Any, Any] = {}
 class PolyRing(DefaultPrinting, IPolys):
     """Multivariate distributed polynomial ring. """
 
+    gens: tuple[PolyElement, ...]
+    symbols: tuple[Expr, ...]
+    ngens: int
+    domain: Domain
+    order: MonomialOrder
+
     def __new__(cls, symbols, domain, order=lex):
         symbols = tuple(_parse_symbols(symbols))
         ngens = len(symbols)
@@ -279,7 +286,7 @@ class PolyRing(DefaultPrinting, IPolys):
         state = self.__dict__.copy()
         del state["leading_expv"]
 
-        for key, value in state.items():
+        for key in state:
             if key.startswith("monomial_"):
                 del state[key]
 
@@ -1638,7 +1645,7 @@ class PolyElement(DomainElement, DefaultPrinting, CantSympify, dict):
         elif i < 0:
             return 0
         else:
-            return max([ monom[i] for monom in f.itermonoms() ])
+            return max(monom[i] for monom in f.itermonoms())
 
     def degrees(f):
         """
@@ -1666,7 +1673,7 @@ class PolyElement(DomainElement, DefaultPrinting, CantSympify, dict):
         elif i < 0:
             return 0
         else:
-            return min([ monom[i] for monom in f.itermonoms() ])
+            return min(monom[i] for monom in f.itermonoms())
 
     def tail_degrees(f):
         """
@@ -2263,7 +2270,7 @@ class PolyElement(DomainElement, DefaultPrinting, CantSympify, dict):
         # multiplying top and bottom by a unit of the ring.
         u = q.canonical_unit()
         if u == domain.one:
-            p, q = p, q
+            pass
         elif u == -domain.one:
             p, q = -p, -q
         else:
@@ -2474,7 +2481,7 @@ class PolyElement(DomainElement, DefaultPrinting, CantSympify, dict):
 
             for i, (monom, coeff) in enumerate(f.terms()):
                 if all(monom[i] >= monom[i + 1] for i in indices):
-                    height = max([n*m for n, m in zip(weights, monom)])
+                    height = max(n*m for n, m in zip(weights, monom))
 
                     if height > _height:
                         _height, _monom, _coeff = height, monom, coeff
@@ -2983,7 +2990,10 @@ class PolyElement(DomainElement, DefaultPrinting, CantSympify, dict):
         if f.ring.is_univariate:
             return f.ring.dup_shift(f, a)
         else:
-            raise MultivariatePolynomialError("polynomial shift")
+            raise MultivariatePolynomialError("shift: use shift_list instead")
+
+    def shift_list(f, a):
+        return f.ring.dmp_shift(f, a)
 
     def sturm(f):
         if f.ring.is_univariate:
@@ -2993,6 +3003,9 @@ class PolyElement(DomainElement, DefaultPrinting, CantSympify, dict):
 
     def gff_list(f):
         return f.ring.dmp_gff_list(f)
+
+    def norm(f):
+        return f.ring.dmp_norm(f)
 
     def sqf_norm(f):
         return f.ring.dmp_sqf_norm(f)

@@ -180,7 +180,7 @@ def test_sympify_bool():
     assert sympify(False) is false
 
 
-def test_sympyify_iterables():
+def test_sympify_iterables():
     ans = [Rational(3, 10), Rational(1, 5)]
     assert sympify(['.3', '.2'], rational=True) == ans
     assert sympify({"x": 0, "y": 1}) == {x: 0, y: 1}
@@ -647,8 +647,8 @@ def test_sympify_numpy():
     assert equal(sympify(np.complex64(1 + 2j)), S(1.0 + 2.0*I))
     assert equal(sympify(np.complex128(1 + 2j)), S(1.0 + 2.0*I))
 
-    lcprec = np.finfo(np.longcomplex(1)).nmant + 1
-    assert equal(sympify(np.longcomplex(1 + 2j)),
+    lcprec = np.finfo(np.clongdouble(1)).nmant + 1
+    assert equal(sympify(np.clongdouble(1 + 2j)),
                 Float(1.0, precision=lcprec) + Float(2.0, precision=lcprec)*I)
 
     #float96 does not exist on all platforms
@@ -769,9 +769,9 @@ def test_numpy_sympify_args():
 
 
 def test_issue_5939():
-     a = Symbol('a')
-     b = Symbol('b')
-     assert sympify('''a+\nb''') == a + b
+    a = Symbol('a')
+    b = Symbol('b')
+    assert sympify('''a+\nb''') == a + b
 
 
 def test_issue_16759():
@@ -883,3 +883,10 @@ def test_issue_21536():
     assert u.is_Add and set(u.args) == {4*x, 2}
     assert v.is_Add and set(v.args) == {6*x, 6}
     assert sympify(["x+3*x+2", "2*x+4*x+2+4"]) == [u, v]
+
+def test_issue_27284():
+    if not numpy:
+        skip("numpy not installed.")
+
+    assert Float(numpy.float32(float('inf'))) == S.Infinity
+    assert Float(numpy.float32(float('-inf'))) == S.NegativeInfinity
