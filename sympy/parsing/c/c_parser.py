@@ -180,6 +180,7 @@ if cin:
             """
             file = tempfile.NamedTemporaryFile(mode = 'w+', suffix = '.cpp')
             file.write(source)
+            file.flush()
             file.seek(0)
             self.tu = self.index.parse(
                 file.name,
@@ -546,10 +547,10 @@ if cin:
 
             """
             try:
-               value = next(node.get_tokens()).spelling
+                value = next(node.get_tokens()).spelling
             except (StopIteration, ValueError):
                 # No tokens
-               value = node.literal
+                value = node.literal
             return ord(str(value[1]))
 
         def transform_cxx_bool_literal_expr(self, node):

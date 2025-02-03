@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from .basic import Atom, Basic
+from .coreerrors import LazyExceptionMessage
 from .sorting import ordered
 from .evalf import EvalfMixin
 from .function import AppliedUndef
+from .numbers import int_valued
 from .singleton import S
 from .sympify import _sympify, SympifyError
 from .parameters import global_parameters
@@ -50,6 +52,8 @@ def _canonical_coeff(rel):
     rel = rel.canonical
     if not rel.is_Relational or rel.rhs.is_Boolean:
         return rel  # Eq(x, True)
+    if not isinstance(rel.lhs, Expr):
+        return rel.reversed  # e.g.: Eq(True, x) -> Eq(x, True)
     b, l = rel.lhs.as_coeff_Add(rational=True)
     m, lhs = l.as_coeff_Mul(rational=True)
     rhs = (rel.rhs - b)/m
@@ -427,6 +431,9 @@ class Relational(Boolean, EvalfMixin):
             v = None
             if dif.is_comparable:
                 v = dif.n(2)
+                if any(i._prec == 1 for i in v.as_real_imag()):
+                    rv, iv = [i.n(2) for i in dif.as_real_imag()]
+                    v = rv + S.ImaginaryUnit*iv
             elif dif.equals(0):  # XXX this is expensive
                 v = S.Zero
             if v is not None:
@@ -508,8 +515,12 @@ class Relational(Boolean, EvalfMixin):
         args = (arg.expand(**kwargs) for arg in self.args)
         return self.func(*args)
 
-    def __bool__(self):
-        raise TypeError("cannot determine truth value of Relational")
+    def __bool__(self) -> bool:
+        raise TypeError(
+            LazyExceptionMessage(
+                lambda: f"cannot determine truth value of Relational: {self}"
+            )
+        )
 
     def _eval_as_set(self):
         # self is univariate and periodicity(self, x) in (0, None)
@@ -1567,6 +1578,15 @@ def is_eq(lhs, rhs, assumptions=None):
                 return False
             if z:
                 return True
+
+        # is_zero cannot help decide integer/rational with Float
+        c, t = dif.as_coeff_Add()
+        if c.is_Float:
+            if int_valued(c):
+                if t.is_integer is False:
+                    return False
+            elif t.is_rational is False:
+                return False
 
         n2 = _n2(lhs, rhs)
         if n2 is not None:

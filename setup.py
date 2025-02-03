@@ -34,8 +34,6 @@ from setuptools import setup, Command
 from setuptools.command.sdist import sdist
 
 
-min_mpmath_version = '0.19'
-
 # This directory
 dir_setup = os.path.dirname(os.path.realpath(__file__))
 
@@ -214,7 +212,7 @@ class sdist_sympy(sdist):
             commit_hash = commit_hash.rstrip()
             print('Commit hash found : {}.'.format(commit_hash))
             print('Writing it to {}.'.format(commit_hash_filepath))
-        except:
+        except Exception:
             pass
 
         if commit_hash:
@@ -310,7 +308,7 @@ with open(os.path.join(dir_setup, 'sympy', 'release.py')) as f:
 
 if __name__ == '__main__':
     setup(name='sympy',
-          version=__version__,
+          version=__version__, # noqa: F821
           description='Computer algebra system (CAS) in Python',
           long_description=(Path(__file__).parent / 'README.md').read_text("UTF-8"),
           long_description_content_type='text/markdown',
@@ -322,6 +320,10 @@ if __name__ == '__main__':
           project_urls={
               'Source': 'https://github.com/sympy/sympy',
           },
+          # Set upper bound when making the release branch.
+          install_requires=[
+              'mpmath >= 1.1.0',
+          ],
           py_modules=['isympy'],
           packages=['sympy'] + modules + tests,
           ext_modules=[],
@@ -359,9 +361,6 @@ if __name__ == '__main__':
             'Programming Language :: Python :: 3 :: Only',
             'Programming Language :: Python :: Implementation :: CPython',
             'Programming Language :: Python :: Implementation :: PyPy',
-            ],
-          install_requires=[
-            'mpmath>=%s' % min_mpmath_version,
             ],
           extras_require={
               "dev": ["pytest>=7.1.0", "hypothesis>=6.70.0"],

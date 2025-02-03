@@ -1,8 +1,7 @@
-from sympy.core.intfunc import mod_inverse
 from sympy.polys.matrices.exceptions import DMNonInvertibleMatrixError
 from sympy.polys.domains import EX
 
-from .common import MatrixError, NonSquareMatrixError, NonInvertibleMatrixError
+from .exceptions import MatrixError, NonSquareMatrixError, NonInvertibleMatrixError
 from .utilities import _iszero
 
 
@@ -137,53 +136,6 @@ def _pinv(M, method='RD'):
         return _pinv_diagonalization(M)
     else:
         raise ValueError('invalid pinv method %s' % repr(method))
-
-
-def _inv_mod(M, m):
-    r"""
-    Returns the inverse of the matrix `K` (mod `m`), if it exists.
-
-    Method to find the matrix inverse of `K` (mod `m`) implemented in this function:
-
-    * Compute `\mathrm{adj}(K) = \mathrm{cof}(K)^t`, the adjoint matrix of `K`.
-
-    * Compute `r = 1/\mathrm{det}(K) \pmod m`.
-
-    * `K^{-1} = r\cdot \mathrm{adj}(K) \pmod m`.
-
-    Examples
-    ========
-
-    >>> from sympy import Matrix
-    >>> A = Matrix(2, 2, [1, 2, 3, 4])
-    >>> A.inv_mod(5)
-    Matrix([
-    [3, 1],
-    [4, 2]])
-    >>> A.inv_mod(3)
-    Matrix([
-    [1, 1],
-    [0, 1]])
-
-    """
-
-    if not M.is_square:
-        raise NonSquareMatrixError()
-
-    N       = M.cols
-    det_K   = M.det()
-    det_inv = None
-
-    try:
-        det_inv = mod_inverse(det_K, m)
-    except ValueError:
-        raise NonInvertibleMatrixError('Matrix is not invertible (mod %d)' % m)
-
-    K_adj = M.adjugate()
-    K_inv = M.__class__(N, N,
-            [det_inv * K_adj[i, j] % m for i in range(N) for j in range(N)])
-
-    return K_inv
 
 
 def _verify_invertible(M, iszerofunc=_iszero):
@@ -332,6 +284,18 @@ def _try_DM(M, use_EX=False):
     else:
         return dM
 
+
+def _use_exact_domain(dom):
+    """Check whether to convert to an exact domain."""
+    # DomainMatrix can handle RR and CC with partial pivoting. Other inexact
+    # domains like RR[a,b,...] can only be handled by converting to an exact
+    # domain like QQ[a,b,...]
+    if dom.is_RR or dom.is_CC:
+        return False
+    else:
+        return not dom.is_Exact
+
+
 def _inv_DM(dM, cancel=True):
     """Calculates the inverse using ``DomainMatrix``.
 
@@ -346,13 +310,26 @@ def _inv_DM(dM, cancel=True):
     sympy.polys.matrices.domainmatrix.DomainMatrix.inv
     """
     m, n = dM.shape
+    dom = dM.domain
+
     if m != n:
         raise NonSquareMatrixError("A Matrix must be square to invert.")
+
+    # Convert RR[a,b,...] to QQ[a,b,...]
+    use_exact = _use_exact_domain(dom)
+
+    if use_exact:
+        dom_exact = dom.get_exact()
+        dM = dM.convert_to(dom_exact)
 
     try:
         dMi, den = dM.inv_den()
     except DMNonInvertibleMatrixError:
         raise NonInvertibleMatrixError("Matrix det == 0; not invertible.")
+
+    if use_exact:
+        dMi = dMi.convert_to(dom)
+        den = dom.convert_from(den, dom_exact)
 
     if cancel:
         # Convert to field and cancel with the denominator.

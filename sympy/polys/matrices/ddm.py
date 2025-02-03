@@ -63,6 +63,7 @@ representation is friendlier.
 """
 from itertools import chain
 
+from sympy.external.gmpy import GROUND_TYPES
 from sympy.utilities.decorator import doctest_depends_on
 
 from .exceptions import (
@@ -94,6 +95,10 @@ from .dense import (
 from .lll import ddm_lll, ddm_lll_transform
 
 
+if GROUND_TYPES != 'flint':
+    __doctest_skip__ = ['DDM.to_dfm', 'DDM.to_dfm_or_ddm']
+
+
 class DDM(list):
     """Dense matrix based on polys domain elements
 
@@ -112,7 +117,7 @@ class DDM(list):
         if len(rowslist) != m or any(len(row) != n for row in rowslist):
             raise DMBadInputError("Inconsistent row-list/shape")
 
-        super().__init__(rowslist)
+        super().__init__([i.copy() for i in rowslist])
         self.shape = (m, n)
         self.rows = m
         self.cols = n
@@ -181,8 +186,9 @@ class DDM(list):
         ========
 
         to_list_flat
+        sympy.polys.matrices.domainmatrix.DomainMatrix.to_list
         """
-        return list(self)
+        return [row[:] for row in self]
 
     def to_list_flat(self):
         """
@@ -202,7 +208,7 @@ class DDM(list):
         See Also
         ========
 
-        from_list_flat
+        sympy.polys.matrices.domainmatrix.DomainMatrix.to_list_flat
         """
         flat = []
         for row in self:
@@ -229,6 +235,7 @@ class DDM(list):
         ========
 
         to_list_flat
+        sympy.polys.matrices.domainmatrix.DomainMatrix.from_list_flat
         """
         assert type(flat) is list
         rows, cols = shape
@@ -304,6 +311,62 @@ class DDM(list):
         """
         return SDM.from_flat_nz(elements, data, domain).to_ddm()
 
+    def to_dod(self):
+        """
+        Convert to a dictionary of dictionaries (dod) format.
+
+        Examples
+        ========
+
+        >>> from sympy.polys.matrices.ddm import DDM
+        >>> from sympy import QQ
+        >>> A = DDM([[1, 2], [3, 4]], (2, 2), QQ)
+        >>> A.to_dod()
+        {0: {0: 1, 1: 2}, 1: {0: 3, 1: 4}}
+
+        See Also
+        ========
+
+        from_dod
+        sympy.polys.matrices.sdm.SDM.to_dod
+        sympy.polys.matrices.domainmatrix.DomainMatrix.to_dod
+        """
+        dod = {}
+        for i, row in enumerate(self):
+            row = {j:e for j, e in enumerate(row) if e}
+            if row:
+                dod[i] = row
+        return dod
+
+    @classmethod
+    def from_dod(cls, dod, shape, domain):
+        """
+        Create a :class:`DDM` from a dictionary of dictionaries (dod) format.
+
+        Examples
+        ========
+
+        >>> from sympy.polys.matrices.ddm import DDM
+        >>> from sympy import QQ
+        >>> dod = {0: {0: 1, 1: 2}, 1: {0: 3, 1: 4}}
+        >>> A = DDM.from_dod(dod, (2, 2), QQ)
+        >>> A
+        [[1, 2], [3, 4]]
+
+        See Also
+        ========
+
+        to_dod
+        sympy.polys.matrices.sdm.SDM.from_dod
+        sympy.polys.matrices.domainmatrix.DomainMatrix.from_dod
+        """
+        rows, cols = shape
+        lol = [[domain.zero] * cols for _ in range(rows)]
+        for i, row in dod.items():
+            for j, element in row.items():
+                lol[i][j] = element
+        return DDM(lol, shape, domain)
+
     def to_dok(self):
         """
         Convert :class:`DDM` to dictionary of keys (dok) format.
@@ -358,6 +421,54 @@ class DDM(list):
         for (i, j), element in dok.items():
             lol[i][j] = element
         return DDM(lol, shape, domain)
+
+    def iter_values(self):
+        """
+        Iterater over the non-zero values of the matrix.
+
+        Examples
+        ========
+
+        >>> from sympy.polys.matrices.ddm import DDM
+        >>> from sympy import QQ
+        >>> A = DDM([[QQ(1), QQ(0)], [QQ(3), QQ(4)]], (2, 2), QQ)
+        >>> list(A.iter_values())
+        [1, 3, 4]
+
+        See Also
+        ========
+
+        iter_items
+        to_list_flat
+        sympy.polys.matrices.domainmatrix.DomainMatrix.iter_values
+        """
+        for row in self:
+            yield from filter(None, row)
+
+    def iter_items(self):
+        """
+        Iterate over indices and values of nonzero elements of the matrix.
+
+        Examples
+        ========
+
+        >>> from sympy.polys.matrices.ddm import DDM
+        >>> from sympy import QQ
+        >>> A = DDM([[QQ(1), QQ(0)], [QQ(3), QQ(4)]], (2, 2), QQ)
+        >>> list(A.iter_items())
+        [((0, 0), 1), ((1, 0), 3), ((1, 1), 4)]
+
+        See Also
+        ========
+
+        iter_values
+        to_dok
+        sympy.polys.matrices.domainmatrix.DomainMatrix.iter_items
+        """
+        for i, row in enumerate(self):
+            for j, element in enumerate(row):
+                if element:
+                    yield (i, j), element
 
     def to_ddm(self):
         """
@@ -846,6 +957,48 @@ class DDM(list):
         swaps = ddm_ilu_split(L, U, K)
 
         return L, U, swaps
+
+    def qr(self):
+        """
+        QR decomposition for DDM.
+
+        Returns:
+            - Q: Orthogonal matrix as a DDM.
+            - R: Upper triangular matrix as a DDM.
+
+        See Also
+        ========
+
+        sympy.polys.matrices.domainmatrix.DomainMatrix.qr
+            The higher-level interface to this function.
+        """
+        rows, cols = self.shape
+        K = self.domain
+        Q = self.copy()
+        R = self.zeros((min(rows, cols), cols), K)
+
+        # Check that the domain is a field
+        if not K.is_Field:
+            raise DMDomainError("QR decomposition requires a field (e.g. QQ).")
+
+        dot_cols = lambda i, j: K.sum(Q[k][i] * Q[k][j] for k in range(rows))
+
+        for j in range(cols):
+            for i in range(min(j, rows)):
+                dot_ii = dot_cols(i, i)
+                if dot_ii != K.zero:
+                    R[i][j] = dot_cols(i, j) / dot_ii
+                    for k in range(rows):
+                        Q[k][j] -= R[i][j] * Q[k][i]
+
+            if j < rows:
+                dot_jj = dot_cols(j, j)
+                if dot_jj != K.zero:
+                    R[j][j] = K.one
+
+        Q = Q.extract(range(rows), range(min(rows, cols)))
+
+        return Q, R
 
     def lu_solve(a, b):
         """x where a*x = b"""
