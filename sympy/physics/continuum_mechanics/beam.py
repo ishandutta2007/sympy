@@ -471,6 +471,13 @@ class Beam:
         else:
             new_second_moment = self.second_moment
 
+        if via== "fixed" or via=="hinge":
+            pass
+        else:
+            raise ValueError(
+                "Invalid joining method. Choose from 'fixed' or 'hinge'."
+            )
+
         if via == "fixed":
             new_beam = Beam(new_length, E, new_second_moment, x)
             new_beam._joined_beam = True
@@ -534,6 +541,13 @@ class Beam:
         + 10*SingularityFunction(x, 20, -1)
         """
         loc = sympify(loc)
+
+        if type == "fixed" or type=="roller" or type=="pin":
+            pass
+        else:
+            raise ValueError(
+                "Invalid support type. Choose from 'pin', 'roller', or 'fixed'."
+            )
 
         self._applied_supports.append((loc, type))
         if type in ("pin", "roller"):
@@ -1108,8 +1122,34 @@ class Beam:
         return integrate(self.shear_force(), x)
 
     def max_bmoment(self):
-        """Returns maximum Shear force and its coordinate
-        in the Beam object."""
+        """
+        Returns maximum Shear force and its coordinate
+        in the Beam object.
+
+        Examples
+        ========
+        There is a beam of length 10 meters. At the left end of the beam
+        there is a fixed support. At two meters from the right end of the
+        beam there is a roller support. A downwards distributed load of 10 kN/m
+        is applied between the two supports. At the right end of the beam, a
+        downwards point load of 50 kN is applied.
+
+        Using the sign convention of upward forces and clockwise moment
+        being positive.
+
+        >>> from sympy.physics.continuum_mechanics.beam import Beam
+        >>> from sympy import symbols
+        >>> E, I = symbols('E, I')
+        >>> b = Beam(10, E, I)
+        >>> b.apply_load(5000, 2, -1)
+        >>> p0, m0 = b.apply_support(0, type='fixed')
+        >>> p8 = b.apply_support(8, type='roller')
+        >>> b.apply_load(20000, 0, 0, end=8)
+        >>> b.apply_load(50000, 10, -1)
+        >>> b.solve_for_reaction_loads(p0, m0, p8)
+        >>> b.max_bmoment()
+        (0, 233125/2)
+        """
         bending_curve = self.bending_moment()
         x = self.variable
 
@@ -2861,6 +2901,12 @@ class Beam3D(Beam):
             self._load_Singularity[0] += value*SingularityFunction(x, start, order)
 
     def apply_support(self, loc, type="fixed"):
+        if type in ("pin", "roller", "fixed"):
+            pass
+        else:
+            raise ValueError(
+                "Invalid support type. Choose from 'pin', 'roller', or 'fixed'."
+            )
         if type in ("pin", "roller"):
             reaction_load = Symbol('R_'+str(loc))
             self._reaction_loads[reaction_load] = reaction_load
